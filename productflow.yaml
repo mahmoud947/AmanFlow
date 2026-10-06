@@ -1,0 +1,10 @@
+version: 1
+
+targets:
+  backend:
+    type: node
+    root: backend
+
+  mobile:
+    type: flutter
+    root: mobile
