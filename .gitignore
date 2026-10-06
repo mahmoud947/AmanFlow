@@ -33,3 +33,6 @@ mobile/build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Atlas onboarding credentials
+atlas-credentials.env
