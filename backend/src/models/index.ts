@@ -2,10 +2,25 @@ import { Schema, model } from 'mongoose';
 
 const opts = { versionKey: false, timestamps: true } as const;
 
+// Accounts must be provisioned with a customerId matching the financial records.
+// Passwords are stored only as salted scrypt hashes (see auth.ts).
+export const Account = model(
+  'Account',
+  new Schema(
+    {
+      identifier: { type: String, required: true, unique: true },
+      passwordHash: { type: String, required: true },
+      customerId: { type: String, required: true },
+    },
+    opts,
+  ),
+);
+
 export const Customer = model(
   'Customer',
   new Schema(
     {
+      customerId: { type: String, required: true, unique: true },
       code: { type: String, required: true, unique: true },
       name: { type: String, required: true },
       phone: { type: String, required: true },

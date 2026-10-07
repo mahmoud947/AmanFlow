@@ -1,55 +1,79 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { wallet, service } = vi.hoisted(() => ({
-  wallet: { findOne: vi.fn() },
+const { account, wallet, transactions, profile, service, payment } = vi.hoisted(() => ({
+  account: { findOne: vi.fn() },
+  wallet: { findOne: vi.fn(), updateOne: vi.fn() },
+  transactions: { find: vi.fn(), create: vi.fn() },
+  profile: { findOne: vi.fn() },
   service: { findOne: vi.fn() },
+  payment: { create: vi.fn(), find: vi.fn() },
 }));
 
 vi.mock('../src/models', () => ({
-  Wallet: { findOne: () => ({ lean: wallet.findOne }), updateOne: vi.fn() },
-  PaymentService: { findOne: () => ({ lean: service.findOne }) },
-  Customer: {},
-  Transaction: { create: vi.fn() },
-  Payment: { create: vi.fn().mockResolvedValue({ _id: 'pay_1' }) },
+  Account: { findOne: () => ({ lean: account.findOne }) },
+  Wallet: { findOne: (filter: unknown) => ({ lean: () => wallet.findOne(filter) }), updateOne: wallet.updateOne },
+  PaymentService: { findOne: () => ({ lean: service.findOne }), find: vi.fn() },
+  Customer: { findOne: (filter: unknown) => ({ lean: () => profile.findOne(filter) }) },
+  Transaction: { find: (filter: unknown) => ({ sort: () => ({ lean: () => transactions.find(filter) }) }), create: transactions.create },
+  Payment: { create: payment.create, find: (filter: unknown) => ({ sort: () => ({ limit: () => ({ lean: () => payment.find(filter) }) }) }) },
 }));
 
+import { hashPassword } from '../src/auth';
 import { createApp } from '../src/app';
 
 const app = createApp();
 
-describe('API sanity', () => {
-  beforeEach(() => vi.clearAllMocks());
+async function signIn(customerId: string) {
+  account.findOne.mockResolvedValue({ customerId, passwordHash: hashPassword('test-password') });
+  const response = await request(app).post('/auth/login').send({ identifier: 'user@example.test', password: 'test-password' });
+  expect(response.status).toBe(200);
+  return `Bearer ${response.body.token as string}`;
+}
 
-  it('GET /health', async () => {
-    const res = await request(app).get('/health');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+describe('authenticated API', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('keeps health public and denies financial routes without a valid session', async () => {
+    expect((await request(app).get('/health')).body).toEqual({ status: 'ok' });
+    for (const path of ['/wallet', '/transactions', '/payments', '/profile', '/services']) {
+      expect((await request(app).get(path)).status).toBe(401);
+    }
+    expect((await request(app).post('/payments').send({})).status).toBe(401);
+    expect(wallet.findOne).not.toHaveBeenCalled();
   });
 
-  it('GET /wallet', async () => {
-    wallet.findOne.mockResolvedValue({ customerId: 'customer_001', balance: 12450, currency: 'EGP', maskedNumber: '•••• 4821' });
-    const res = await request(app).get('/wallet');
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ id: 'wallet_001', balance: 12450, currency: 'EGP' });
+  it('rejects missing and incorrect credentials without a session', async () => {
+    expect((await request(app).post('/auth/login').send({})).status).toBe(400);
+    account.findOne.mockResolvedValue({ customerId: 'one', passwordHash: hashPassword('correct') });
+    expect((await request(app).post('/auth/login').send({ identifier: 'user@example.test', password: 'wrong' })).status).toBe(401);
+    expect((await request(app).get('/wallet').set('Authorization', 'Bearer invalid')).status).toBe(401);
   });
 
-  it('POST /payments rejects missing fields and bad amounts', async () => {
-    expect((await request(app).post('/payments').send({})).status).toBe(400);
-    const bad = await request(app).post('/payments').send({ serviceId: 'recharge', amount: 0, reference: '0100' });
-    expect(bad.status).toBe(400);
+  it('scopes wallet, transactions, profile and payments to the authenticated identity', async () => {
+    const authorization = await signIn('second_customer');
+    wallet.findOne.mockResolvedValue(null);
+    transactions.find.mockResolvedValue([]);
+    profile.findOne.mockResolvedValue(null);
+    payment.find.mockResolvedValue([]);
+    await request(app).get('/wallet?customerId=customer_001').set('Authorization', authorization);
+    await request(app).get('/transactions').set('Authorization', authorization);
+    await request(app).get('/profile').set('Authorization', authorization);
+    await request(app).get('/payments').set('Authorization', authorization);
+    for (const mock of [wallet.findOne, transactions.find, profile.findOne, payment.find]) {
+      expect(mock).toHaveBeenCalledWith({ customerId: 'second_customer' });
+    }
   });
 
-  it('POST /payments rejects unknown service', async () => {
-    service.findOne.mockResolvedValue(null);
-    const res = await request(app).post('/payments').send({ serviceId: 'nope', amount: 10, reference: 'x' });
-    expect(res.status).toBe(404);
-  });
-
-  it('POST /payments succeeds for a valid request', async () => {
+  it('scopes payment writes to the authenticated identity', async () => {
+    const authorization = await signIn('second_customer');
     service.findOne.mockResolvedValue({ key: 'recharge', name: 'Mobile Recharge' });
-    const res = await request(app).post('/payments').send({ serviceId: 'recharge', amount: 50, reference: '01012345678' });
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe('completed');
+    payment.create.mockResolvedValue({ _id: 'p1' });
+    const response = await request(app).post('/payments').set('Authorization', authorization)
+      .send({ serviceId: 'recharge', amount: 50, reference: '01012345678', customerId: 'customer_001' });
+    expect(response.status).toBe(201);
+    expect(payment.create).toHaveBeenCalledWith(expect.objectContaining({ customerId: 'second_customer' }));
+    expect(transactions.create).toHaveBeenCalledWith(expect.objectContaining({ customerId: 'second_customer' }));
+    expect(wallet.updateOne).toHaveBeenCalledWith({ customerId: 'second_customer' }, { $inc: { balance: -50 } });
   });
 });

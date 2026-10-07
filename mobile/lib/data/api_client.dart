@@ -13,19 +13,35 @@ class ApiException implements Exception {
 class ApiClient {
   final String baseUrl;
   final http.Client _http;
+  String? _token;
   ApiClient(this.baseUrl, {http.Client? client})
     : _http = client ?? http.Client();
 
+  Future<void> signIn(String identifier, String password) async {
+    _token = null;
+    final result = await post('/auth/login', {
+      'identifier': identifier,
+      'password': password,
+    });
+    _token = (result as Map<String, dynamic>)['token'] as String;
+  }
+
   Future<dynamic> get(String path) async {
-    final res = await _send(() => _http.get(Uri.parse('$baseUrl$path')));
+    final res = await _send(() => _http.get(
+      Uri.parse('$baseUrl$path'), headers: _headers,
+    ));
     return _decode(res);
   }
+
+  Map<String, String> get _headers => {
+    if (_token != null) 'authorization': 'Bearer $_token',
+  };
 
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
     final res = await _send(
       () => _http.post(
         Uri.parse('$baseUrl$path'),
-        headers: {'content-type': 'application/json'},
+        headers: {..._headers, 'content-type': 'application/json'},
         body: jsonEncode(body),
       ),
     );

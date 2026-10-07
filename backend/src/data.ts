@@ -2,6 +2,7 @@
 export const CUSTOMER_ID = 'customer_001';
 
 export const seedCustomer = {
+  customerId: CUSTOMER_ID,
   code: 'AF-102938',
   name: 'Ahmed Hassan',
   phone: '+20 10 *** **67',

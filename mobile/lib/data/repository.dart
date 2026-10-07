@@ -2,6 +2,7 @@ import 'api_client.dart';
 import 'models.dart';
 
 abstract class FinanceRepository {
+  Future<void> signIn(String identifier, String password);
   Future<Wallet> getWallet();
   Future<List<TransactionItemData>> getTransactions();
   Future<List<PaymentServiceData>> getServices();
@@ -17,6 +18,10 @@ abstract class FinanceRepository {
 class ApiFinanceRepository implements FinanceRepository {
   final ApiClient _api;
   ApiFinanceRepository(this._api);
+
+  @override
+  Future<void> signIn(String identifier, String password) =>
+      _api.signIn(identifier, password);
 
   List<Map<String, dynamic>> _list(dynamic json) =>
       (json as List).cast<Map<String, dynamic>>();

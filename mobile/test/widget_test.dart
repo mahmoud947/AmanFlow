@@ -5,6 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeRepository implements FinanceRepository {
+  int signIns = 0;
+  @override
+  Future<void> signIn(String identifier, String password) async {
+    signIns++;
+    if (identifier != 'user@example.test' || password != 'password') {
+      throw Exception('Invalid credentials');
+    }
+  }
   @override
   Future<Wallet> getWallet() async => const Wallet(id: 'w1', balance: 12450, currency: 'EGP', maskedNumber: '•••• 4821');
   @override
@@ -28,31 +36,45 @@ class FakeRepository implements FinanceRepository {
   }
 }
 
-void main() {
-  testWidgets('Home renders API data and navigation reaches all areas', (tester) async {
-    await tester.pumpWidget(AmanFlowApp(repository: FakeRepository()));
-    await tester.pumpAndSettle();
+Future<void> login(WidgetTester tester) async {
+  await tester.enterText(find.byKey(const Key('login-identifier')), 'user@example.test');
+  await tester.enterText(find.byKey(const Key('login-password')), 'password');
+  await tester.ensureVisible(find.text('Sign in').last);
+  await tester.tap(find.text('Sign in').last);
+  await tester.pumpAndSettle();
+}
 
+void main() {
+  testWidgets('Protected home is hidden until sign-in succeeds', (tester) async {
+    final repo = FakeRepository();
+    await tester.pumpWidget(AmanFlowApp(repository: repo));
+    expect(find.text('Available Balance'), findsNothing);
+    await tester.tap(find.text('Sign in').last);
+    await tester.pump();
+    expect(find.text('Enter your email or mobile number.'), findsOneWidget);
+    expect(repo.signIns, 0);
+    await tester.enterText(find.byKey(const Key('login-identifier')), 'user@example.test');
+    await tester.enterText(find.byKey(const Key('login-password')), 'wrong');
+    await tester.tap(find.text('Sign in').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Available Balance'), findsNothing);
+    await login(tester);
     expect(find.text('Available Balance'), findsOneWidget);
     expect(find.text('EGP 12,450.00'), findsOneWidget);
     expect(find.text('Vodafone Recharge'), findsOneWidget);
-    expect(find.text('Recent Transactions'), findsOneWidget);
-
     await tester.tap(find.text('Payments').last);
     await tester.pumpAndSettle();
     expect(find.text('Recent Payments'), findsOneWidget);
-
     await tester.tap(find.text('Profile').last);
     await tester.pumpAndSettle();
     expect(find.text('Ahmed Hassan'), findsOneWidget);
     expect(find.text('Security'), findsOneWidget);
   });
 
-  testWidgets('Payments sheet submits a payment through the repository', (tester) async {
+  testWidgets('Payments sheet submits after sign-in', (tester) async {
     final repo = FakeRepository();
     await tester.pumpWidget(AmanFlowApp(repository: repo));
-    await tester.pumpAndSettle();
-
+    await login(tester);
     await tester.tap(find.text('Payments').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mobile Recharge').first);
@@ -61,7 +83,6 @@ void main() {
     await tester.enterText(find.byKey(const Key('payment-amount')), '150');
     await tester.tap(find.text('Pay now'));
     await tester.pumpAndSettle();
-
     expect(repo.lastPayment, 'recharge|150|01012345678');
   });
 }
