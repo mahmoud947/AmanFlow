@@ -5,8 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeRepository implements FinanceRepository {
+  bool authenticated = false;
+  bool rejectSignIn = false;
   @override
-  Future<Wallet> getWallet() async => const Wallet(id: 'w1', balance: 12450, currency: 'EGP', maskedNumber: '•••• 4821');
+  Future<void> signIn(String identifier, String password) async {
+    if (rejectSignIn) throw Exception('Invalid credentials');
+    if (identifier == 'demo@amanflow.example' && password == 'Demo-only-2026!') {
+      authenticated = true;
+      return;
+    }
+    throw Exception('Invalid credentials');
+  }
+
+  @override
+  Future<Wallet> getWallet() async {
+    if (!authenticated) throw StateError('Not authenticated');
+    return const Wallet(id: 'w1', balance: 12450, currency: 'EGP', maskedNumber: '•••• 4821');
+  }
   @override
   Future<Profile> getProfile() async =>
       const Profile(id: 'c1', name: 'Ahmed Hassan', phone: '+20 10 *** **67', customerCode: 'AF-102938');
@@ -28,10 +43,35 @@ class FakeRepository implements FinanceRepository {
   }
 }
 
+Future<void> signIn(WidgetTester tester) async {
+  await tester.enterText(find.byKey(const Key('login-identifier')), 'demo@amanflow.example');
+  await tester.enterText(find.byKey(const Key('login-password')), 'Demo-only-2026!');
+  await tester.tap(find.byKey(const Key('login-submit')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('Protected content stays hidden until sign-in succeeds', (tester) async {
+    final repo = FakeRepository()..rejectSignIn = true;
+    await tester.pumpWidget(AmanFlowApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(find.text('Available Balance'), findsNothing);
+    await tester.tap(find.byKey(const Key('login-submit')));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter an email or mobile number.'), findsOneWidget);
+    await signIn(tester);
+    expect(find.text('Available Balance'), findsNothing);
+    expect(find.textContaining('Sign in could not be completed'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Email or mobile number'), findsOneWidget);
+    repo.rejectSignIn = false;
+    await signIn(tester);
+    expect(find.text('Available Balance'), findsOneWidget);
+  });
+
   testWidgets('Home renders API data and navigation reaches all areas', (tester) async {
     await tester.pumpWidget(AmanFlowApp(repository: FakeRepository()));
     await tester.pumpAndSettle();
+    await signIn(tester);
 
     expect(find.text('Available Balance'), findsOneWidget);
     expect(find.text('EGP 12,450.00'), findsOneWidget);
@@ -52,6 +92,7 @@ void main() {
     final repo = FakeRepository();
     await tester.pumpWidget(AmanFlowApp(repository: repo));
     await tester.pumpAndSettle();
+    await signIn(tester);
 
     await tester.tap(find.text('Payments').last);
     await tester.pumpAndSettle();
