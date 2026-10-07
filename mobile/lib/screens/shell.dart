@@ -5,7 +5,8 @@ import 'payments_screen.dart';
 import 'profile_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final Future<void> Function() onLogout;
+  const AppShell({super.key, required this.onLogout});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -19,7 +20,7 @@ class _AppShellState extends State<AppShell> {
     final pages = [
       HomeScreen(onOpenPayments: () => setState(() => _index = 1)),
       const PaymentsScreen(),
-      const ProfileScreen(),
+      ProfileScreen(onLogout: widget.onLogout),
     ];
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),

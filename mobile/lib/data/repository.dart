@@ -3,6 +3,9 @@ import 'models.dart';
 
 abstract class FinanceRepository {
   Future<void> signIn(String identifier, String password);
+  String? get sessionMaterial;
+  Future<void> validateSession(String session);
+  void clearSession();
   Future<Wallet> getWallet();
   Future<List<TransactionItemData>> getTransactions();
   Future<List<PaymentServiceData>> getServices();
@@ -22,6 +25,15 @@ class ApiFinanceRepository implements FinanceRepository {
   @override
   Future<void> signIn(String identifier, String password) =>
       _api.signIn(identifier, password);
+
+  @override
+  String? get sessionMaterial => _api.sessionMaterial;
+
+  @override
+  Future<void> validateSession(String session) => _api.validateSession(session);
+
+  @override
+  void clearSession() => _api.clearSession();
 
   List<Map<String, dynamic>> _list(dynamic json) =>
       (json as List).cast<Map<String, dynamic>>();
