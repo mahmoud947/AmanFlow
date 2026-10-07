@@ -13,11 +13,31 @@ class ApiException implements Exception {
 class ApiClient {
   final String baseUrl;
   final http.Client _http;
+  String? _token;
   ApiClient(this.baseUrl, {http.Client? client})
     : _http = client ?? http.Client();
 
+  Future<void> signIn(String identifier, String password) async {
+    _token = null;
+    final res = await _send(() => _http.post(
+      Uri.parse('$baseUrl/auth/login'),
+      headers: {'content-type': 'application/json'},
+      body: jsonEncode({'identifier': identifier, 'password': password}),
+    ));
+    final data = _decode(res);
+    if (data is! Map || data['token'] is! String || (data['token'] as String).isEmpty) {
+      throw ApiException('Sign in could not be completed.');
+    }
+    _token = data['token'] as String;
+  }
+
+  Map<String, String> get _headers => {
+    'content-type': 'application/json',
+    if (_token != null) 'authorization': 'Bearer $_token',
+  };
+
   Future<dynamic> get(String path) async {
-    final res = await _send(() => _http.get(Uri.parse('$baseUrl$path')));
+    final res = await _send(() => _http.get(Uri.parse('$baseUrl$path'), headers: _headers));
     return _decode(res);
   }
 
@@ -25,7 +45,7 @@ class ApiClient {
     final res = await _send(
       () => _http.post(
         Uri.parse('$baseUrl$path'),
-        headers: {'content-type': 'application/json'},
+        headers: _headers,
         body: jsonEncode(body),
       ),
     );
