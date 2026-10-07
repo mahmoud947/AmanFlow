@@ -6,6 +6,9 @@ export const Customer = model(
   'Customer',
   new Schema(
     {
+      customerId: { type: String, required: true, unique: true },
+      identifier: { type: String, required: true, unique: true },
+      passwordHash: { type: String, required: true, select: false },
       code: { type: String, required: true, unique: true },
       name: { type: String, required: true },
       phone: { type: String, required: true },

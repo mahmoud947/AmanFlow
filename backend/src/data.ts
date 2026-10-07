@@ -1,7 +1,12 @@
 // Deterministic demo data. Entirely fictional.
 export const CUSTOMER_ID = 'customer_001';
+// Fictional demo-only account; never use these example credentials for a real account.
+export const DEMO_IDENTIFIER = 'demo@amanflow.example';
+export const DEMO_PASSWORD = 'Demo-only-2026!';
 
 export const seedCustomer = {
+  customerId: CUSTOMER_ID,
+  identifier: DEMO_IDENTIFIER,
   code: 'AF-102938',
   name: 'Ahmed Hassan',
   phone: '+20 10 *** **67',
