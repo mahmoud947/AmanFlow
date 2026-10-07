@@ -17,6 +17,25 @@ class ApiClient {
   ApiClient(this.baseUrl, {http.Client? client})
     : _http = client ?? http.Client();
 
+  String? get sessionMaterial => _token;
+  void clearSession() => _token = null;
+
+  /// This request uses an existing authenticated route; a response alone is
+  /// not enough unless it contains the expected profile identity.
+  Future<void> validateSession(String token) async {
+    _token = token;
+    try {
+      final profile = await get('/profile');
+      if (profile is! Map || profile['id'] is! String ||
+          (profile['id'] as String).isEmpty) {
+        throw ApiException('Session could not be confirmed.');
+      }
+    } catch (_) {
+      _token = null;
+      rethrow;
+    }
+  }
+
   Future<void> signIn(String identifier, String password) async {
     _token = null;
     final res = await _send(() => _http.post(

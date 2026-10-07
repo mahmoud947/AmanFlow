@@ -4,7 +4,8 @@ import '../core/theme.dart';
 import '../state/app_state.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  final Future<void> Function() onLogout;
+  const ProfileScreen({super.key, required this.onLogout});
 
   static const _rows = <(IconData, String, String)>[
     (
@@ -94,6 +95,13 @@ class ProfileScreen extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            key: const Key('profile-logout'),
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout),
+            label: const Text('Log out'),
           ),
         ],
       ),
